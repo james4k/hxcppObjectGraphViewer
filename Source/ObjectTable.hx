@@ -29,17 +29,21 @@ class ObjectNode {
 
 	}
 
-	public function inclusiveSize (visited:Map<Int, Bool>):Int {
+	public function inclusiveSize (visited:Map<Int, Bool>, depthLimit:Int, depth:Int):Int {
 
 		if (visited.get (addr) != null) {
 			return 0;
 		}
 		visited.set (addr, true);
 
+		if (depth >= depthLimit) {
+			return 0;
+		}
+
 		var size = this.size;
 
 		for (m in members) {
-			size += m.inclusiveSize (visited);
+			size += m.inclusiveSize (visited, depthLimit, depth + 1);
 		}
 
 		return size;
@@ -58,15 +62,15 @@ class ObjectGroup {
 
 	public function new () {}
 
-	public function compute ():Void {
-		inclusiveSize = computeInclusiveSize ();
+	public function compute (depthLimit:Int):Void {
+		inclusiveSize = computeInclusiveSize (depthLimit);
 	}
 
-	private function computeInclusiveSize ():Int {
+	private function computeInclusiveSize (depthLimit:Int):Int {
 		var size = 0;
 		var visited = new Map<Int, Bool> ();
 		for (n in nodes) {
-			size += n.inclusiveSize (visited);
+			size += n.inclusiveSize (visited, depthLimit, 1);
 		}
 		return size;
 	}
@@ -160,7 +164,7 @@ class ObjectTable {
 	}
 
 
-	public function aggregate ():Array<ObjectGroup> {
+	public function aggregate (depthLimit:Int):Array<ObjectGroup> {
 
 		var classIDSets = new Map<Int, Map<ObjectNode, Bool>> ();
 
@@ -189,7 +193,7 @@ class ObjectTable {
 			for (n in set.keys()) {
 				g.nodes.push (n);
 			}
-			g.compute ();
+			g.compute (depthLimit);
 			groups.push (g);
 		}
 

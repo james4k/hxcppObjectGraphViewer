@@ -4,9 +4,11 @@ package;
 import openfl.display.Bitmap;
 import openfl.display.BitmapData;
 import openfl.display.Sprite;
+import openfl.events.KeyboardEvent;
 import openfl.text.TextField;
 import openfl.text.TextFormat;
 import openfl.text.TextFormatAlign;
+import openfl.ui.Keyboard;
 import openfl.Assets;
 
 
@@ -14,6 +16,8 @@ class Main extends Sprite {
 
 
 	var text:TextField;
+	var table:ObjectTable;
+	var depthLimit = 10;
 
 	
 	public function new () {
@@ -27,10 +31,14 @@ class Main extends Sprite {
 		text.height = 1200;
 		addChild (text);
 
+		// TODO(james4k): show a menu of most recent files
+
 		var fd = new lime.ui.FileDialog ();
 		fd.onSelect.add (onSelect);
 		fd.onCancel.add (function ():Void { Sys.exit (0); });
 		fd.browse ();
+
+		stage.addEventListener (KeyboardEvent.KEY_UP, onKeyUp);
 
 	}
 
@@ -38,11 +46,33 @@ class Main extends Sprite {
 	private function onSelect (path:String):Void {
 
 		var f = sys.io.File.read (path);
-		var table = ObjectTable.read (f);
+		table = ObjectTable.read (f);
 		f.close ();
 
-		var groups = table.aggregate ();
-		var str = "";
+		update ();
+
+	}
+
+
+	private function onKeyUp (event:KeyboardEvent):Void {
+
+		if (event.keyCode == Keyboard.UP) {
+			depthLimit += 1;
+			update ();
+		} else if (event.keyCode == Keyboard.DOWN) {
+			depthLimit -= 1;
+			update ();
+		}
+
+	}
+	
+	
+	private function update ():Void {
+
+		var groups = table.aggregate (depthLimit);
+
+		var str = 'depth_limit=${depthLimit < 30 ? ("" + depthLimit) : "Inf"}';
+		str += "    adjust with up/down keys\n\n";
 		str += StringTools.lpad ("inclusive_size", " ", 15);
 		str += StringTools.lpad ("num_instances", " ", 15);
 		str += "  " + "class_name" + "\n";
@@ -55,6 +85,4 @@ class Main extends Sprite {
 		text.text = str;
 
 	}
-	
-	
 }
