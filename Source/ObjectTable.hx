@@ -1,103 +1,26 @@
 package;
 
 
-class ObjectNode {
-
-	public var addr:Int;
-	public var className:String;
-	public var size:Int;
-	public var members:Array<ObjectNode>;
-	public var memberNames:Array<String>;
-	//public var owners:Array<ObjectNode>;
-
-	public function new () {}
-
-	public function totalCount (visited:Map<Int, Bool>):Int {
-
-		if (visited.get (addr) != null) {
-			return 0;	
-		}
-		visited.set (addr, true);
-
-		var count = 1;
-
-		for (m in members) {
-			count += m.totalCount (visited);
-		}
-
-		return count;
-
-	}
-
-	public function inclusiveSize (visited:Map<Int, Bool>, depthLimit:Int, depth:Int):Int {
-
-		if (visited.get (addr) != null) {
-			return 0;
-		}
-		visited.set (addr, true);
-
-		if (depth >= depthLimit) {
-			return 0;
-		}
-
-		var size = this.size;
-
-		for (m in members) {
-			size += m.inclusiveSize (visited, depthLimit, depth + 1);
-		}
-
-		return size;
-
-	}
-
-}
-
-
-class ObjectGroup {
-
-	public var label:String;
-	public var nodes:Array<ObjectNode>;
-
-	public var inclusiveSize:Int;
-
-	public function new () {}
-
-	public function compute (depthLimit:Int):Void {
-		inclusiveSize = computeInclusiveSize (depthLimit);
-	}
-
-	private function computeInclusiveSize (depthLimit:Int):Int {
-		var size = 0;
-		var visited = new Map<Int, Bool> ();
-		for (n in nodes) {
-			size += n.inclusiveSize (visited, depthLimit, 1);
-		}
-		return size;
-	}
-
-}
-
-
 class ObjectTable {
 
 
-	var classNameIDs = new Map<String, Int> ();
-	var fieldNameIDs = new Map<String, Int> ();
-	var classNames = new Array<String> ();
-	var fieldNames = new Array<String> ();
-	var lastClassID = 0;
-	var lastFieldID = 0;
+	public var classNameIDs = new Map<String, Int> ();
+	public var fieldNameIDs = new Map<String, Int> ();
+	public var classNames = new Array<String> ();
+	public var fieldNames = new Array<String> ();
+	public var lastClassID = 0;
+	public var lastFieldID = 0;
 
 	// table
-	var thisAddrs = new Array<Int> ();
-	var memberAddrs = new Array<Int> ();
-	var memberSizes = new Array<Int> ();
-	var memberClassIDs = new Array<Int> ();
-	var memberFieldIDs = new Array<Int> ();
+	public var thisAddrs = new Array<Int> ();
+	public var memberAddrs = new Array<Int> ();
+	public var memberSizes = new Array<Int> ();
+	public var memberClassIDs = new Array<Int> ();
+	public var memberFieldIDs = new Array<Int> ();
 
 	// graph
-	var addrNodes = new Map<Int, ObjectNode> ();
-	var roots = new Array<ObjectNode> ();
+	public var addrNodes = new Map<Int, ObjectNode> ();
+	//public var roots = new Array<ObjectNode> ();
 
 
 	public function new () {}
@@ -148,10 +71,6 @@ class ObjectTable {
 					table.memberFieldIDs.push (id);
 				}
 
-				if (cells[2] == "7875540") {
-					trace (cells[0], cells[1], cells[2], cells[3], cells[4]);
-				}
-
 			}	
 
 		} catch (e:haxe.io.Eof) {
@@ -160,48 +79,6 @@ class ObjectTable {
 		table.buildGraph ();
 
 		return table;
-
-	}
-
-
-	public function aggregate (depthLimit:Int):Array<ObjectGroup> {
-
-		var classIDSets = new Map<Int, Map<ObjectNode, Bool>> ();
-
-		for (i in 0...(thisAddrs.length)) {
-
-			var set = classIDSets.get (memberClassIDs[i]);
-			if (set == null) {
-				set = new Map<ObjectNode, Bool> ();
-				classIDSets.set (memberClassIDs[i], set);
-			}
-			var node = addrNodes.get (memberAddrs[i]);
-			if (node == null) {
-				throw 'ObjectNode not found for addr ${memberAddrs[i]}';
-			}
-			set.set (node, true);
-
-		}
-
-		var groups = new Array<ObjectGroup> ();
-
-		for (classID in classIDSets.keys ()) {
-			var set = classIDSets.get (classID);
-			var g = new ObjectGroup ();
-			g.label = classNames[classID];
-			g.nodes = new Array<ObjectNode> ();
-			for (n in set.keys()) {
-				g.nodes.push (n);
-			}
-			g.compute (depthLimit);
-			groups.push (g);
-		}
-
-		groups.sort (function (a:ObjectGroup, b:ObjectGroup):Int {
-			return b.inclusiveSize - a.inclusiveSize;	
-		});
-
-		return groups;
 
 	}
 
@@ -215,33 +92,41 @@ class ObjectTable {
 			if (thisNode == null) {
 				thisNode = new ObjectNode ();
 				thisNode.addr = thisAddrs[i];
-				thisNode.className = "<root>";
+				thisNode.className = "<unknown>";
 				thisNode.members = new Array<ObjectNode> ();
 				thisNode.memberNames = new Array<String> ();
+				thisNode.referrers = new Array<ObjectNode> ();
 				addrNodes.set (thisAddrs[i], thisNode);
 			}
 			if (memberNode == null) {
 				memberNode = new ObjectNode ();
 				memberNode.addr = memberAddrs[i];
 				memberNode.className = classNames[memberClassIDs[i]];
+				memberNode.fieldName = fieldNames[memberFieldIDs[i]];
 				memberNode.size = memberSizes[i];
 				memberNode.members = new Array<ObjectNode> ();
 				memberNode.memberNames = new Array<String> ();
+				memberNode.referrers = new Array<ObjectNode> ();
 				addrNodes.set (memberAddrs[i], memberNode);
-			} else if (memberNode.className == "<root>") {
+			} else if (memberNode.className == "<unknown>") {
 				memberNode.className = classNames[memberClassIDs[i]];
+				memberNode.fieldName = fieldNames[memberFieldIDs[i]];
+				memberNode.size = memberSizes[i];
 			}
 
 			thisNode.members.push (memberNode);
 			thisNode.memberNames.push (fieldNames[memberFieldIDs[i]]); 
+			memberNode.referrers.push (thisNode);
 			
 		}
 
+#if 0
 		for (node in addrNodes) {
-			if (node.className == "<root>") {
+			if (node.className == "<unknown>") {
 				roots.push (node);
 			}
 		}
+#end
 
 	}
 
