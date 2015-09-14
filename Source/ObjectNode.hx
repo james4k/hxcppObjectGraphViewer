@@ -12,6 +12,9 @@ class ObjectNode {
 	public var memberNames:Array<String>;
 	public var referrers:Array<ObjectNode>;
 
+	// here for convenience. not computed by default.
+	public var inclSize:Int;
+
 
 	public function new () {}
 

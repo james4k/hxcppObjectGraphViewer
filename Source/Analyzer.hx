@@ -58,6 +58,13 @@ class Analyzer {
 	}
 
 
+	public function lookupNode (addr:Int):ObjectNode {
+
+		return table.addrNodes.get (addr);
+		
+	}
+
+
 	public function groupByType ():Array<ObjectGroup> {
 
 		return aggregate ();

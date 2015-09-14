@@ -23,12 +23,14 @@ class Main extends Sprite {
 	var groups:Array<ObjectGroup>;
 
 	var splitView:HSplitViewControl;
-	var groupTable:TableControl;
-	var objectTable:TableControl;
-	var objectBrowser:TableControl;
+	var mainView:TableControl;
+	var objectListView:TableControl;
+	var objectAnalysisView:TableControl;
 
 	var selectedGroup:ObjectGroup;
 	var selectedNode:ObjectNode;
+
+	var mainViewTab = OverviewTab;
 
 
 	public function new () {
@@ -37,18 +39,20 @@ class Main extends Sprite {
 
 		splitView = new HSplitViewControl (this);
 
-		groupTable = new TableControl (this);
-		objectTable = new TableControl (this);
-		objectBrowser = new TableControl (this);
-		splitView.addControl (groupTable);
-		splitView.addControl (objectTable);
-		splitView.addControl (objectBrowser);
+		mainView = new TableControl (this);
+		objectListView = new TableControl (this);
+		objectAnalysisView = new TableControl (this);
+		splitView.addControl (mainView);
+		splitView.addControl (objectListView);
+		splitView.addControl (objectAnalysisView);
 		splitView.firstLayout (0, 0, stage.stageWidth, stage.stageHeight);
 		splitView.moveSplitter (0, stage.stageWidth/2);
 		splitView.moveSplitter (1, stage.stageWidth/2 + 140);
 
-		groupTable.onRowClick = onGroupRowClick;
-		objectTable.onRowHover = onObjectRowHover;
+		mainView.onRowClick = onMainRowClick;
+		objectListView.onRowClick = onObjectListRowClick;
+		objectListView.onRowHover = onObjectListRowHover;
+		objectAnalysisView.onRowClick = onObjectAnalysisRowClick;
 
 		//onResize (null);
 
@@ -93,21 +97,83 @@ class Main extends Sprite {
 	}
 
 
-	private function onGroupRowClick (index:Int):Void {
+	private function onMainRowClick (event:MouseEvent, index:Int):Void {
 
-		// account for header lines
-		if (index >= 5) {
-			updateObjectTable (index-5);
+		if (index == 0) {
+
+			var word = mainView.getWordAt (event.stageX, event.stageY);
+			if (word == "overview") {
+				updateOverview ();
+			} else if (word == "browser") {
+				updateObjectBrowser ();
+			}
+
+			return;
+
+		}
+
+		if (mainViewTab == OverviewTab) {
+
+			// account for header lines
+			if (index >= 6) {
+				selectedGroup = groups[index-6];
+				updateObjectList ();
+			}
+
+		} else if (mainViewTab == BrowserTab) {
+
+			var word = mainView.getWordAt (event.localX, event.localY);
+			var addr = Std.parseInt ("0x" + word);
+			if (addr != null && addr != 0) {
+				var node = azr.lookupNode (addr);
+				if (node != null) {
+					selectedNode = node;
+					updateObjectBrowser ();
+					updateObjectAnalysis ();
+				}
+			}
+
 		}
 		
 	}
 
 
-	private function onObjectRowHover (index:Int):Void {
+	private function onObjectListRowClick (event:MouseEvent, index:Int):Void {
 
 		// account for header lines
 		if (index >= 3) {
-			printObjectInfo (index-3);
+			selectedNode = selectedGroup.nodes[index-3];
+			updateObjectBrowser ();
+		}
+		
+	}
+
+
+	private function onObjectListRowHover (index:Int):Void {
+
+		// account for header lines
+		if (index >= 3) {
+			selectedNode = selectedGroup.nodes[index-3];
+			updateObjectAnalysis ();
+			if (mainViewTab == BrowserTab) {
+				updateObjectBrowser ();
+			}
+		}
+		
+	}
+
+
+	private function onObjectAnalysisRowClick (event:MouseEvent, index:Int):Void {
+
+		var word = objectAnalysisView.getWordAt (event.localX, event.localY);
+		var addr = Std.parseInt ("0x" + word);
+		if (addr != null && addr != 0) {
+			var node = azr.lookupNode (addr);
+			if (node != null) {
+				selectedNode = node;
+				updateObjectBrowser ();
+				updateObjectAnalysis ();
+			}
 		}
 		
 	}
@@ -118,28 +184,29 @@ class Main extends Sprite {
 		groups = azr.groupByType ();
 		ObjectGroup.sortBySize (groups);
 		//ObjectGroup.sortByInstances (groups);
-		updateGroupTable ();
+		updateOverview ();
 
 	}
 
 	
-	private function updateGroupTable ():Void {
+	private function updateOverview ():Void {
+
+		mainViewTab = OverviewTab;
 
 		var maxRows = 200;
 
 		var str = new StringBuf ();
-		str.add ('total_bytes=${azr.totalBytes} total_objects=${azr.totalObjects}\n\n');
+		str.add ('|<overview>| browser |\n\n');
+		str.add ('total_bytes=${azr.totalBytes} total_objects=${azr.totalObjects}\n');
 		str.add ('incl_walk_depth=${azr.depthLimit}');
 		str.add ("    adjust with up/down keys\n\n");
 		str.add (StringTools.lpad ("incl_size", " ", 10));
 		str.add (StringTools.lpad ("n_inst", " ", 8));
-//		str.add (StringTools.lpad ("n_refs", " ", 8));
 		str.add ("  " + "class_name" + "\n");
 		var nrows = 0;
 		for (g in groups) {
 			str.add (StringTools.lpad ("" + g.inclusiveSize, " ", 10));
 			str.add (StringTools.lpad ("" + g.nodes.length, " ", 8));
-//			str.add (StringTools.lpad ("" + g.refCount, " ", 8));
 			str.add ("  " + g.label + "\n");
 			nrows += 1;
 			if (nrows > maxRows) {
@@ -147,30 +214,74 @@ class Main extends Sprite {
 			}
 		}
 
-		groupTable.setText (str.toString ());
+		mainView.setText (str.toString ());
 
 	}
 
 
-	private function updateObjectTable (index:Int):Void {
+	private function updateObjectBrowser ():Void {
+
+		mainViewTab = BrowserTab;
 
 		var maxRows = 200;
 
-		var g = groups[index];
+		var str = new StringBuf ();
+		str.add ('| overview |<browser>|\n\n');
+
+		if (selectedNode == null) {
+			mainView.setText (str.toString ());
+			return;
+		}
+
+		var hexAddr = StringTools.hex (selectedNode.addr, 8);
+		str.add (hexAddr);
+		str.add (' field_name=${selectedNode.fieldName}');
+		str.add (' class_name=${selectedNode.className}');
+		str.add (' excl_size=${selectedNode.size}\n\n');
+
+		str.add ('referrers\n');
+		for (r in selectedNode.referrers) {
+			hexAddr = StringTools.hex (r.addr, 8);
+			str.add ('$hexAddr ${r.fieldName}:${r.className}\n');
+		}
+
+		str.add ('\nmembers\n');
+		for (m in selectedNode.members) {
+			hexAddr = StringTools.hex (m.addr, 8);
+			str.add ('$hexAddr ${m.fieldName}:${m.className}\n');
+		}
+
+		mainView.setText (str.toString ());
+
+	}
+
+
+	private function updateObjectList ():Void {
+
+		var maxRows = 200;
+
+		var g = selectedGroup;
+		if (g == null) {
+			return;
+		}
 
 		var str = new StringBuf ();
 		str.add ('${g.label}\n\n');
-		str.add (StringTools.lpad ("excl_size", " ", 9));
+		str.add (StringTools.lpad ("incl_size", " ", 9));
 		str.add (StringTools.lpad ("addr", " ", 9));
 		str.add ("\n");
 		//str.add ("  " + "class_name" + "\n");
 		var nrows = 0;
 
+		for (node in g.nodes) {
+			var visited = new Map<Int, Bool> ();
+			node.inclSize = node.inclusiveSize (visited, azr.depthLimit, 0);
+		}
 		g.nodes.sort (function (a:ObjectNode, b:ObjectNode):Int {
-			return b.size - a.size;
+			return b.inclSize - a.inclSize;
 		});
 		for (node in g.nodes) {
-			str.add (StringTools.lpad ("" + node.size, " ", 9));
+			str.add (StringTools.lpad ("" + node.inclSize, " ", 9));
 			str.add (StringTools.lpad ("" + StringTools.hex (node.addr, 8), " ", 9));
 			//str.add ("  " + node.className);
 			str.add ("\n");
@@ -180,37 +291,20 @@ class Main extends Sprite {
 			}
 		}
 
-		objectTable.setText (str.toString ());
-		selectedGroup = g;
+		objectListView.setText (str.toString ());
 
 	}
 
 
-	private function printObjectInfo (index:Int):Void {
-
-		var node = selectedGroup.nodes[index];
-		if (node == selectedNode) {
-			return;
-		}
-
-		selectedNode = node;
+	private function updateObjectAnalysis ():Void {
 
 		var str = new StringBuf ();
-		//str.add ('${node.className} addr=${node.addr}\n\n');
-		//str.add (StringTools.lpad ("excl_size", " ", 9));
-		//str.add (StringTools.lpad ("addr", " ", 9));
-		//str.add ("\n");
-		//str.add ("  " + "class_name" + "\n");
-
-		//buildMemberTree (str, selectedGroup.nodes[index], 0);
-#if 0
-		for (refr in node.referrers) {
-			var addr = StringTools.hex (refr.addr, 8);
-			str.add ('${refr.className} addr=${refr.addr} size=${refr.size}\n');
-		}
-#end
-
 		str.add ("roots\n\n");
+
+		var node = selectedNode;
+		if (node == null) {
+			return;
+		}
 
 		var rootPaths = new Array<Array<ObjectNode>> ();
 		{
@@ -252,27 +346,18 @@ class Main extends Sprite {
 			}
 		}
 
-		objectBrowser.setText (str.toString ());
+		objectAnalysisView.setText (str.toString ());
 
 	}
 
 
-	private static function buildMemberTree (str:StringBuf, node:ObjectNode, depth:Int):Void {
+}
 
-		if (depth > 3) {
-			return;
-		}
 
-		var addr = StringTools.hex (node.addr, 8);
-		str.add (StringTools.lpad ("", " ", depth * 2));
-		str.add ('${node.className} addr=${addr} size=${node.size}\n');
+enum MainViewTab {
 
-		for (m in node.members) {
-			buildMemberTree (str, m, depth+1);
-		}
-
-	}
-
+	OverviewTab;
+	BrowserTab;
 
 }
 
@@ -462,7 +547,7 @@ class HSplitViewControl extends Control {
 class TableControl extends Control {
 
 
-	public var onRowClick:Int->Void;
+	public var onRowClick:MouseEvent->Int->Void;
 	public var onRowHover:Int->Void;
 
 
@@ -503,11 +588,59 @@ class TableControl extends Control {
 	}
 
 
+	private static function isValidWordChar (charCode:Int):Bool {
+
+		if (charCode >= "0".code && charCode <= "9".code) {
+			return true;
+		}
+		if (charCode >= "a".code && charCode <= "z".code) {
+			return true;
+		}
+		if (charCode >= "A".code && charCode <= "Z".code) {
+			return true;
+		}
+		if (charCode == "_".code) {
+			return true;
+		}
+		return false;
+		
+	}
+
+	public function getWordAt (x:Float, y:Float):String {
+
+		var s = tf.text;
+		var firstChar = tf.getCharIndexAtPoint (x, y);
+		var line = tf.getLineIndexOfChar (firstChar);
+		var minChar = tf.getLineOffset (line);
+		var maxChar = minChar + tf.getLineLength (line);
+		var lastChar = firstChar;
+		while (true) {
+			if (firstChar <= minChar) {
+				break;
+			}
+			if (!isValidWordChar (s.charCodeAt (firstChar-1))) {
+				break;
+			}
+			firstChar--;
+		}
+		while (true) {
+			if (lastChar >= maxChar) {
+				break;
+			}
+			if (!isValidWordChar (s.charCodeAt (lastChar+1))) {
+				break;
+			}
+			lastChar++;
+		}
+		return s.substring (firstChar, lastChar+1);
+	}
+
+
 	private function onTextClick (event:MouseEvent):Void {
 
 		if (onRowClick != null) {
 			var lineIndex = tf.getLineIndexAtPoint (event.localX, event.localY);
-			onRowClick (lineIndex);
+			onRowClick (event, lineIndex);
 		}
 
 	}
