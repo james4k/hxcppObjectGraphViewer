@@ -118,6 +118,15 @@ class Main extends Sprite {
 			if (index >= 6) {
 				selectedGroup = groups[index-6];
 				updateObjectList ();
+			} else {
+				var word = mainView.getWordAt (event.stageX, event.stageY);
+				if (word == "incl_size") {
+					ObjectGroup.sortBySize (groups);
+					updateOverview ();
+				} else if (word == "n_inst") {
+					ObjectGroup.sortByInstances (groups);
+					updateOverview ();
+				}
 			}
 
 		} else if (mainViewTab == BrowserTab) {
@@ -183,7 +192,6 @@ class Main extends Sprite {
 
 		groups = azr.groupByType ();
 		ObjectGroup.sortBySize (groups);
-		//ObjectGroup.sortByInstances (groups);
 		updateOverview ();
 
 	}
