@@ -7,7 +7,7 @@ https://github.com/james4k/hxcpp/commits/object-graph
 
 To use, build your app with `-DHXCPP_GC_DUMP_OBJECT_GRAPH`,
 which will cause the program to dump an `object_graph.csv` file
-in the working directory after every GC. Select this file in
+in the working directory <s>after every GC</s> at peak memory usage. Select this file in
 the file selection dialog when you run hxcppObjectGraphViewer.
 
 The user interface is extremely crude right now. Here is how to use it:
